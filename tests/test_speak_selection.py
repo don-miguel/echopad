@@ -64,6 +64,22 @@ def test_trigger_with_empty_selection_notifies_and_skips():
     assert notes and "selected" in notes[0].lower()
 
 
+def test_state_callbacks_wrap_playback():
+    player = FakePlayer()
+    states = []
+    ctrl = SpeakSelectionController(
+        _cfg(),
+        tts_player=player,
+        capture=lambda: "a long piece of selected text",
+        summarize_fn=lambda text, cfg: "SHORT SUMMARY",
+        notify=lambda _m: None,
+        on_state=states.append,
+    )
+    ctrl.trigger()
+    assert _wait(lambda: states == ["speaking", "idle"])
+    assert player.spoken == ["SHORT SUMMARY"]
+
+
 def test_stop_forwards_to_player():
     player = FakePlayer()
     ctrl = SpeakSelectionController(

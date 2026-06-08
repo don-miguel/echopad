@@ -49,3 +49,26 @@ def test_committed_text_is_pasted_with_trailing_space():
         time.sleep(0.02)
     ctrl.toggle()
     assert pasted == ["hello world "]
+
+
+def test_runner_error_is_surfaced_and_state_reset():
+    notes = []
+    states = []
+
+    def boom_runner(config, stop_event, on_committed):
+        raise RuntimeError("ws boom")
+
+    ctrl = DictationController(
+        _cfg(),
+        paste=lambda _t: None,
+        runner=boom_runner,
+        notify=notes.append,
+        on_state=states.append,
+    )
+    ctrl.start()
+    for _ in range(50):
+        if notes and states:
+            break
+        time.sleep(0.02)
+    assert any("ws boom" in n for n in notes)
+    assert "idle" in states

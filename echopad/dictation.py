@@ -7,6 +7,8 @@ from echopad.mic import MicStream
 from echopad.stt import run_session
 
 PasteFn = Callable[[str], None]
+NotifyFn = Callable[[str], None]
+StateFn = Callable[[str], None]
 Runner = Callable[[Config, threading.Event, Callable[[str], None]], None]
 
 
@@ -15,7 +17,11 @@ def _default_runner(
     stop_event: threading.Event,
     on_committed: Callable[[str], None],
 ) -> None:
-    """Capture mic audio and stream it to STT until stop_event is set."""
+    """Capture mic audio and stream it to STT until stop_event is set.
+
+    Raises if the STT session fails (e.g. a WebSocket/auth error) so the caller
+    can surface it instead of dying silently.
+    """
 
     async def main() -> None:
         audio_queue: "asyncio.Queue[bytes | None]" = asyncio.Queue()
@@ -29,10 +35,20 @@ def _default_runner(
                         await audio_queue.put(chunk)
             await audio_queue.put(None)
 
-        await asyncio.gather(
-            pump_mic(),
-            run_session(config, audio_queue, on_committed),
+        pump = asyncio.create_task(pump_mic())
+        session = asyncio.create_task(run_session(config, audio_queue, on_committed))
+        done, pending = await asyncio.wait(
+            {pump, session}, return_when=asyncio.FIRST_COMPLETED
         )
+        # Whichever finished first, tear the other down cleanly.
+        stop_event.set()
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        for task in done:
+            exc = task.exception()
+            if exc is not None:
+                raise exc
 
     asyncio.run(main())
 
@@ -40,10 +56,19 @@ def _default_runner(
 class DictationController:
     """Toggle dictation on/off. While on, committed transcripts are pasted."""
 
-    def __init__(self, config: Config, paste: PasteFn, runner: Runner = _default_runner):
+    def __init__(
+        self,
+        config: Config,
+        paste: PasteFn,
+        runner: Runner = _default_runner,
+        notify: NotifyFn | None = None,
+        on_state: StateFn | None = None,
+    ):
         self._config = config
         self._paste = paste
         self._runner = runner
+        self._notify = notify
+        self._on_state = on_state
         self._stop_event: threading.Event | None = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
@@ -68,7 +93,16 @@ class DictationController:
                 self._paste(text + " ")
 
             def worker() -> None:
-                self._runner(self._config, stop_event, on_committed)
+                try:
+                    self._runner(self._config, stop_event, on_committed)
+                except Exception as exc:
+                    if self._notify is not None:
+                        self._notify(f"Dictation stopped: {exc}")
+                finally:
+                    # Reflect that capture has ended (covers crashes, not just
+                    # a user-initiated stop).
+                    if self._on_state is not None:
+                        self._on_state("idle")
 
             self._thread = threading.Thread(target=worker, daemon=True)
             self._thread.start()

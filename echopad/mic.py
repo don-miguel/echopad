@@ -30,8 +30,12 @@ class MicStream:
         self._stream.start()
         return self
 
-    def read(self, timeout: float | None = None) -> bytes:
-        return self._frames.get(timeout=timeout)
+    def read(self, timeout: float | None = None) -> bytes | None:
+        """Return the next PCM block, or None if none arrived within `timeout`."""
+        try:
+            return self._frames.get(timeout=timeout)
+        except queue.Empty:
+            return None
 
     def __exit__(self, *exc) -> None:
         if self._stream is not None:

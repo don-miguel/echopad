@@ -83,8 +83,11 @@ async def run_session(
                     on_committed(text)
                 elif kind == "partial" and on_partial:
                     on_partial(text)
-                elif kind == "error" and on_error:
-                    on_error(text or "stt error")
+                elif kind == "error":
+                    if on_error:
+                        on_error(text or "stt error")
+                    else:
+                        raise RuntimeError(text or "stt error")
 
         send_task = asyncio.create_task(sender())
         recv_task = asyncio.create_task(receiver())
@@ -93,3 +96,8 @@ async def run_session(
         )
         for task in pending:
             task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        for task in done:
+            exc = task.exception()
+            if exc is not None:
+                raise exc

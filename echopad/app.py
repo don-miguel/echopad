@@ -1,3 +1,5 @@
+import queue
+
 import rumps
 
 from echopad.config import Config
@@ -17,9 +19,16 @@ class EchoPadApp(rumps.App):
         self._config = config
         self._backend = macos_backend()
 
+        # UI updates can be requested from background/listener threads; rumps is
+        # only safe on the main thread, so everything is funneled through this
+        # queue and applied by a Timer that fires on the main run loop.
+        self._ui_queue: "queue.Queue" = queue.Queue()
+
         self._dictation = DictationController(
             config,
             paste=lambda text: paste_text(text, self._backend),
+            notify=self._notify,
+            on_state=self._set_state,
         )
         self._tts = TTSPlayer(config)
         self._speak = SpeakSelectionController(
@@ -28,9 +37,13 @@ class EchoPadApp(rumps.App):
             capture=lambda: capture_selection(self._backend),
             summarize_fn=summarize,
             notify=self._notify,
+            on_state=self._set_state,
         )
 
         self.menu = ["Toggle Dictation", "Speak Selection", "Stop"]
+
+        self._ui_timer = rumps.Timer(self._drain_ui, 0.1)
+        self._ui_timer.start()
 
         self._hotkeys = HotkeyManager(
             {
@@ -41,23 +54,39 @@ class EchoPadApp(rumps.App):
         )
         self._hotkeys.start()
 
+    # --- main-thread UI marshalling -------------------------------------
+
+    def _post(self, fn) -> None:
+        self._ui_queue.put(fn)
+
+    def _drain_ui(self, _timer) -> None:
+        while True:
+            try:
+                fn = self._ui_queue.get_nowait()
+            except queue.Empty:
+                return
+            fn()
+
     def _set_state(self, state: str) -> None:
-        self.title = _ICONS[state]
+        self._post(lambda: setattr(self, "title", _ICONS[state]))
 
     def _notify(self, message: str) -> None:
-        rumps.notification("EchoPad", "", message)
+        self._post(lambda: rumps.notification("EchoPad", "", message))
+
+    # --- actions ---------------------------------------------------------
 
     def _on_toggle(self) -> None:
         self._dictation.toggle()
         self._set_state("listening" if self._dictation.is_running() else "idle")
 
     def _on_speak(self) -> None:
-        self._set_state("speaking")
+        # The controller drives "speaking"/"idle" state around playback.
         self._speak.trigger()
 
     def _on_stop(self) -> None:
         self._speak.stop()
-        self._set_state("idle")
+        if not self._dictation.is_running():
+            self._set_state("idle")
 
     @rumps.clicked("Toggle Dictation")
     def _menu_toggle(self, _sender):
