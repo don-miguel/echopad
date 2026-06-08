@@ -1,0 +1,24 @@
+# Copy to ~/.config/echopad/config.toml and edit.
+# API keys are NOT here — set ELEVENLABS_API_KEY and MINIMAX_API_KEY in your environment.
+
+[stt]
+model_id = "scribe_v2_realtime"
+language = ""              # "" = auto-detect; else ISO code like "en"
+audio_format = "pcm_16000"
+sample_rate = 16000
+
+[tts]
+voice_id = "21m00Tcm4TlvDq8ikWAM"   # ElevenLabs "Rachel"; change to your voice
+model_id = "eleven_flash_v2_5"
+output_format = "pcm_24000"
+sample_rate = 24000
+
+[summarizer]
+model = "MiniMax-M3"
+base_url = "https://api.minimax.io/v1"
+style = "Summarize in 2-3 concise sentences capturing the key points."
+
+[hotkeys]
+toggle_dictation = "<cmd>+<alt>+d"
+speak_selection = "<cmd>+<alt>+s"
+stop = "<cmd>+<alt>+."
