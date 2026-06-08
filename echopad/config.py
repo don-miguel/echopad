@@ -20,6 +20,9 @@ class Config:
     sample_rate: int
     stt_model_repo: str
     stt_highpass_cutoff: int
+    vad_aggressiveness: int
+    pause_seconds: float
+    vad_frame_ms: int
     tts_voice_id: str
     tts_model_id: str
     tts_output_format: str
@@ -59,6 +62,9 @@ def load_config(
         sample_rate=int(stt.get("sample_rate", 16000)),
         stt_model_repo=stt.get("model_repo", "mlx-community/parakeet-tdt-0.6b-v2"),
         stt_highpass_cutoff=int(stt.get("highpass_cutoff", 80)),
+        vad_aggressiveness=int(stt.get("vad_aggressiveness", 2)),
+        pause_seconds=float(stt.get("pause_seconds", 0.7)),
+        vad_frame_ms=int(stt.get("vad_frame_ms", 30)),
         tts_voice_id=tts.get("voice_id", "21m00Tcm4TlvDq8ikWAM"),
         tts_model_id=tts.get("model_id", "eleven_flash_v2_5"),
         tts_output_format=tts.get("output_format", "pcm_24000"),
@@ -70,7 +76,7 @@ def load_config(
             "Summarize in 2-3 concise sentences capturing the key points.",
         ),
         hotkeys=Hotkeys(
-            toggle_dictation=hk.get("toggle_dictation", "<cmd>+<alt>+d"),
+            toggle_dictation=hk.get("toggle_dictation", "<alt>+<delete>"),
             speak_selection=hk.get("speak_selection", "<cmd>+<alt>+s"),
             stop=hk.get("stop", "<cmd>+<alt>+."),
         ),
