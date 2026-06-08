@@ -1,41 +1,38 @@
-import queue
-
+import numpy as np
 import sounddevice as sd
 
 
-class MicStream:
-    """Capture mono 16-bit PCM from the default input as raw byte blocks.
+class AudioRecorder:
+    """Record mono float32 audio at `sample_rate` into memory.
 
-    Use as a context manager; call `read()` to get the next block of PCM bytes.
+    Use as a context manager: recording runs between __enter__ and __exit__.
+    Call get_audio() to get the concatenated float32 array (empty if nothing
+    was captured).
     """
 
-    def __init__(self, sample_rate: int = 16000, block_ms: int = 100):
+    def __init__(self, sample_rate: int = 16000):
         self.sample_rate = sample_rate
-        self.blocksize = int(sample_rate * block_ms / 1000)
-        self._frames: "queue.Queue[bytes]" = queue.Queue()
-        self._stream: sd.RawInputStream | None = None
+        self._frames: list[np.ndarray] = []
+        self._stream: sd.InputStream | None = None
 
     def _callback(self, indata, frames, time_info, status):
-        # indata is a bytes-like buffer because dtype="int16" on a RawInputStream
-        self._frames.put(bytes(indata))
+        self._frames.append(indata[:, 0].copy())
 
-    def __enter__(self) -> "MicStream":
-        self._stream = sd.RawInputStream(
+    def __enter__(self) -> "AudioRecorder":
+        self._frames = []
+        self._stream = sd.InputStream(
             samplerate=self.sample_rate,
-            blocksize=self.blocksize,
-            dtype="int16",
             channels=1,
+            dtype="float32",
             callback=self._callback,
         )
         self._stream.start()
         return self
 
-    def read(self, timeout: float | None = None) -> bytes | None:
-        """Return the next PCM block, or None if none arrived within `timeout`."""
-        try:
-            return self._frames.get(timeout=timeout)
-        except queue.Empty:
-            return None
+    def get_audio(self) -> np.ndarray:
+        if not self._frames:
+            return np.zeros(0, dtype=np.float32)
+        return np.concatenate(self._frames).astype(np.float32)
 
     def __exit__(self, *exc) -> None:
         if self._stream is not None:

@@ -1,60 +1,37 @@
-import asyncio
 import threading
 from typing import Callable
 
 from echopad.config import Config
-from echopad.mic import MicStream
-from echopad.stt import run_session
+from echopad.mic import AudioRecorder
+from echopad.transcriber import is_model_loaded, load_model, process_audio, transcribe
 
 PasteFn = Callable[[str], None]
 NotifyFn = Callable[[str], None]
 StateFn = Callable[[str], None]
-Runner = Callable[[Config, threading.Event, Callable[[str], None]], None]
+Runner = Callable[..., None]  # (config, stop_event, on_committed, set_state)
 
 
-def _default_runner(
-    config: Config,
-    stop_event: threading.Event,
-    on_committed: Callable[[str], None],
-) -> None:
-    """Capture mic audio and stream it to STT until stop_event is set.
+def _default_runner(config, stop_event, on_committed, set_state) -> None:
+    """Record while stop_event is unset, then transcribe locally and emit text."""
+    if not is_model_loaded(config.stt_model_repo):
+        raise RuntimeError("Speech model is still loading; try again in a moment.")
+    model = load_model(config.stt_model_repo)
 
-    Raises if the STT session fails (e.g. a WebSocket/auth error) so the caller
-    can surface it instead of dying silently.
-    """
+    with AudioRecorder(sample_rate=config.sample_rate) as recorder:
+        stop_event.wait()
+        audio = recorder.get_audio()
 
-    async def main() -> None:
-        audio_queue: "asyncio.Queue[bytes | None]" = asyncio.Queue()
-        loop = asyncio.get_running_loop()
-
-        async def pump_mic() -> None:
-            with MicStream(sample_rate=config.sample_rate) as mic:
-                while not stop_event.is_set():
-                    chunk = await loop.run_in_executor(None, mic.read, 0.2)
-                    if chunk is not None:
-                        await audio_queue.put(chunk)
-            await audio_queue.put(None)
-
-        pump = asyncio.create_task(pump_mic())
-        session = asyncio.create_task(run_session(config, audio_queue, on_committed))
-        done, pending = await asyncio.wait(
-            {pump, session}, return_when=asyncio.FIRST_COMPLETED
-        )
-        # Whichever finished first, tear the other down cleanly.
-        stop_event.set()
-        for task in pending:
-            task.cancel()
-        await asyncio.gather(*pending, return_exceptions=True)
-        for task in done:
-            exc = task.exception()
-            if exc is not None:
-                raise exc
-
-    asyncio.run(main())
+    if audio.size == 0:
+        return
+    set_state("transcribing")
+    processed = process_audio(audio, config.sample_rate, config.stt_highpass_cutoff)
+    text = transcribe(processed, model, config.sample_rate)
+    if text:
+        on_committed(text)
 
 
 class DictationController:
-    """Toggle dictation on/off. While on, committed transcripts are pasted."""
+    """Toggle dictation on/off. Records while on; transcribes & pastes on stop."""
 
     def __init__(
         self,
@@ -92,27 +69,29 @@ class DictationController:
             def on_committed(text: str) -> None:
                 self._paste(text + " ")
 
+            def set_state(state: str) -> None:
+                if self._on_state is not None:
+                    self._on_state(state)
+
             def worker() -> None:
                 try:
-                    self._runner(self._config, stop_event, on_committed)
+                    self._runner(self._config, stop_event, on_committed, set_state)
                 except Exception as exc:
                     if self._notify is not None:
                         self._notify(f"Dictation stopped: {exc}")
                 finally:
-                    # Reflect that capture has ended (covers crashes, not just
-                    # a user-initiated stop).
                     if self._on_state is not None:
                         self._on_state("idle")
 
             self._thread = threading.Thread(target=worker, daemon=True)
             self._thread.start()
+            if self._on_state is not None:
+                self._on_state("listening")
 
     def stop(self) -> None:
+        # Signal recording to end; the worker transcribes, pastes, and sets the
+        # icon back to idle itself. is_running() stays True until it finishes,
+        # which prevents a new recording from overlapping an in-flight transcription.
         with self._lock:
             if self._stop_event is not None:
                 self._stop_event.set()
-            thread = self._thread
-        if thread is not None:
-            thread.join(timeout=3.0)
-        self._thread = None
-        self._stop_event = None

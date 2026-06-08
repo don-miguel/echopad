@@ -1,14 +1,17 @@
 # EchoPad
 
-Local macOS menubar app: toggle dictation (ElevenLabs realtime STT → paste) and
+Local macOS menubar app: toggle dictation (local parakeet-mlx STT → paste) and
 speak-your-selection (MiniMax M3 summary → ElevenLabs TTS).
 
 ## Setup
-1. `brew install portaudio`
+1. `brew install portaudio ffmpeg`
 2. `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
-3. `export ELEVENLABS_API_KEY=...` (MINIMAX_API_KEY is expected to already be set)
+   (If MLX has no wheel for your Python, use Python 3.12: `python3.12 -m venv .venv`.)
+3. `export ELEVENLABS_API_KEY=...` (for TTS; MINIMAX_API_KEY is expected to already be set)
 4. `cp config.example.toml ~/.config/echopad/config.toml` and edit the voice id.
-5. `python -m echopad`
+5. `python -m echopad` — first launch downloads the parakeet STT model (~0.6–1.2 GB), once.
+
+Dictation runs fully locally (parakeet-mlx). Only speak-selection uses the network.
 
 ## Permissions (System Settings → Privacy & Security)
 - Microphone: allow your terminal / the app.
@@ -25,13 +28,15 @@ Requires a real `ELEVENLABS_API_KEY`, granted Microphone + Accessibility
 permissions, and audio output. Run `python -m echopad` first (a 🎙️ icon appears
 in the menubar).
 
-**Dictation:**
-1. Click into a text field (e.g. TextEdit).
-2. Press ⌥⌘D — the menubar icon turns 🔴.
-3. Speak a sentence; within ~1–2s it pastes into the field.
-4. Press ⌥⌘D again — the icon returns to 🎙️.
-5. Copy something beforehand and confirm it's still on your clipboard afterward
-   (dictation saves and restores the clipboard).
+**Dictation (local parakeet-mlx):**
+1. Wait a few seconds after launch for the model to warm-load.
+2. Click into a text field (e.g. TextEdit).
+3. Press ⌥⌘D — the icon turns 🔴 (recording).
+4. Speak a sentence, then press ⌥⌘D again — the icon shows ⏳ while transcribing,
+   then the text is pasted and the icon returns to 🎙️.
+5. Copy something beforehand and confirm it's still on your clipboard afterward.
+6. Toggling on within a second of launch (model not loaded) shows a
+   "still loading" notification instead of recording silently.
 
 **Speak selection:**
 1. Select a paragraph in any app.

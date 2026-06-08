@@ -1,8 +1,20 @@
-from echopad.mic import MicStream
+import numpy as np
+from echopad.mic import AudioRecorder
 
 
-def test_read_returns_none_on_timeout():
-    # No stream started, so the frame queue stays empty: read must time out to
-    # None rather than raising queue.Empty (which would crash the pump loop).
-    mic = MicStream()
-    assert mic.read(timeout=0.01) is None
+def test_get_audio_empty_before_recording():
+    rec = AudioRecorder(sample_rate=16000)
+    audio = rec.get_audio()
+    assert isinstance(audio, np.ndarray)
+    assert audio.dtype == np.float32
+    assert audio.size == 0
+
+
+def test_get_audio_concatenates_frames():
+    rec = AudioRecorder(sample_rate=16000)
+    # Simulate two callback blocks of mono float32 frames.
+    rec._frames.append(np.array([0.1, 0.2], dtype=np.float32))
+    rec._frames.append(np.array([0.3], dtype=np.float32))
+    audio = rec.get_audio()
+    assert audio.dtype == np.float32
+    assert np.allclose(audio, [0.1, 0.2, 0.3])

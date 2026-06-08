@@ -15,9 +15,9 @@ def _cfg():
 def test_toggle_starts_then_stops():
     started = threading.Event()
 
-    def fake_runner(config, stop_event, on_committed):
+    def fake_runner(config, stop_event, on_committed, set_state):
         started.set()
-        stop_event.wait()  # block until stopped
+        stop_event.wait()
 
     ctrl = DictationController(_cfg(), paste=lambda _t: None, runner=fake_runner)
 
@@ -37,7 +37,7 @@ def test_toggle_starts_then_stops():
 def test_committed_text_is_pasted_with_trailing_space():
     pasted = []
 
-    def fake_runner(config, stop_event, on_committed):
+    def fake_runner(config, stop_event, on_committed, set_state):
         on_committed("hello world")
         stop_event.wait()
 
@@ -55,8 +55,8 @@ def test_runner_error_is_surfaced_and_state_reset():
     notes = []
     states = []
 
-    def boom_runner(config, stop_event, on_committed):
-        raise RuntimeError("ws boom")
+    def boom_runner(config, stop_event, on_committed, set_state):
+        raise RuntimeError("model boom")
 
     ctrl = DictationController(
         _cfg(),
@@ -70,5 +70,5 @@ def test_runner_error_is_surfaced_and_state_reset():
         if notes and states:
             break
         time.sleep(0.02)
-    assert any("ws boom" in n for n in notes)
+    assert any("model boom" in n for n in notes)
     assert "idle" in states
