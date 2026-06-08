@@ -29,6 +29,17 @@ class SpeakSelectionController:
         self._on_state = on_state
 
     def trigger(self) -> None:
+        missing = [
+            name
+            for name, value in (
+                ("MINIMAX_API_KEY", self._config.minimax_api_key),
+                ("ELEVENLABS_API_KEY", self._config.elevenlabs_api_key),
+            )
+            if not value
+        ]
+        if missing:
+            self._notify(f"Set {' and '.join(missing)} to use speak-selection")
+            return
         text = self._capture()
         if not text.strip():
             self._notify("Nothing selected")

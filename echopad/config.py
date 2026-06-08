@@ -4,10 +4,6 @@ from pathlib import Path
 from typing import Mapping
 
 
-class ConfigError(Exception):
-    """Raised when required configuration (an API key) is missing."""
-
-
 @dataclass(frozen=True)
 class Hotkeys:
     toggle_dictation: str
@@ -17,8 +13,10 @@ class Hotkeys:
 
 @dataclass(frozen=True)
 class Config:
-    elevenlabs_api_key: str
-    minimax_api_key: str
+    # Optional: local dictation needs no keys. Speak-selection requires both and
+    # fails loudly (with a notification) when invoked without them.
+    elevenlabs_api_key: str | None
+    minimax_api_key: str | None
     sample_rate: int
     stt_model_repo: str
     stt_highpass_cutoff: int
@@ -32,16 +30,6 @@ class Config:
     hotkeys: Hotkeys
 
 
-def _require(env: Mapping[str, str], name: str) -> str:
-    value = env.get(name)
-    if not value:
-        raise ConfigError(
-            f"Missing required environment variable {name}. "
-            f"Set it before starting EchoPad (no fallback is provided)."
-        )
-    return value
-
-
 def load_config(
     config_path: Path | None = None,
     env: Mapping[str, str] | None = None,
@@ -50,8 +38,10 @@ def load_config(
 
     env = os.environ if env is None else env
 
-    elevenlabs_api_key = _require(env, "ELEVENLABS_API_KEY")
-    minimax_api_key = _require(env, "MINIMAX_API_KEY")
+    # Keys are optional at load time. Local dictation needs none; speak-selection
+    # validates its keys when triggered (see SpeakSelectionController).
+    elevenlabs_api_key = env.get("ELEVENLABS_API_KEY") or None
+    minimax_api_key = env.get("MINIMAX_API_KEY") or None
 
     data: dict = {}
     if config_path is not None and Path(config_path).exists():

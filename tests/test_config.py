@@ -1,5 +1,4 @@
-import pytest
-from echopad.config import load_config, Config, ConfigError
+from echopad.config import load_config, Config
 
 
 def _env(**overrides):
@@ -8,16 +7,17 @@ def _env(**overrides):
     return base
 
 
-def test_missing_elevenlabs_key_fails_fast():
-    with pytest.raises(ConfigError) as exc:
-        load_config(config_path=None, env={"MINIMAX_API_KEY": "mm-key"})
-    assert "ELEVENLABS_API_KEY" in str(exc.value)
+def test_missing_keys_do_not_raise_and_are_none():
+    # Local dictation needs no keys; the app must still start without them.
+    cfg = load_config(config_path=None, env={})
+    assert cfg.elevenlabs_api_key is None
+    assert cfg.minimax_api_key is None
 
 
-def test_missing_minimax_key_fails_fast():
-    with pytest.raises(ConfigError) as exc:
-        load_config(config_path=None, env={"ELEVENLABS_API_KEY": "el-key"})
-    assert "MINIMAX_API_KEY" in str(exc.value)
+def test_keys_loaded_when_present():
+    cfg = load_config(config_path=None, env=_env())
+    assert cfg.elevenlabs_api_key == "el-key"
+    assert cfg.minimax_api_key == "mm-key"
 
 
 def test_defaults_when_no_toml():

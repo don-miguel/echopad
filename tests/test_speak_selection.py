@@ -80,6 +80,25 @@ def test_state_callbacks_wrap_playback():
     assert player.spoken == ["SHORT SUMMARY"]
 
 
+def test_trigger_without_keys_notifies_and_skips():
+    cfg = load_config(config_path=None, env={})  # no API keys
+    player = FakePlayer()
+    notes = []
+    summarized = []
+    ctrl = SpeakSelectionController(
+        cfg,
+        tts_player=player,
+        capture=lambda: "some selected text",
+        summarize_fn=lambda t, c: summarized.append(t) or "x",
+        notify=notes.append,
+    )
+    ctrl.trigger()
+    time.sleep(0.1)
+    assert player.spoken == []
+    assert summarized == []
+    assert notes and ("MINIMAX_API_KEY" in notes[0] or "ELEVENLABS_API_KEY" in notes[0])
+
+
 def test_stop_forwards_to_player():
     player = FakePlayer()
     ctrl = SpeakSelectionController(

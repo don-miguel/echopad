@@ -1,7 +1,11 @@
+import logging
 import queue
 import threading
+import time
 
 import rumps
+
+log = logging.getLogger("echopad")
 
 from echopad.config import Config
 from echopad.clipboard import macos_backend, paste_text, capture_selection
@@ -74,10 +78,21 @@ class EchoPadApp(rumps.App):
     def _warm_load_model(self) -> None:
         from echopad.transcriber import load_model
 
+        log.info(
+            "Loading speech model %s (first run downloads ~1 GB)…",
+            self._config.stt_model_repo,
+        )
+        start = time.monotonic()
         try:
             load_model(self._config.stt_model_repo)
         except Exception as exc:
+            log.error("Speech model failed to load: %s", exc)
             self._notify(f"Speech model failed to load: {exc}")
+            return
+        log.info(
+            "Speech model ready in %.1fs — dictation available.",
+            time.monotonic() - start,
+        )
 
     def _set_state(self, state: str) -> None:
         self._post(lambda: setattr(self, "title", _ICONS[state]))
