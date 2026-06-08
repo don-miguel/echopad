@@ -1,4 +1,16 @@
+import re
+
 from echopad.config import Config
+
+# Reasoning models (e.g. MiniMax M3) inline their chain-of-thought in the message
+# content inside <think>...</think> before the actual answer. We must drop it so
+# only the answer is spoken.
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+
+def strip_reasoning(text: str) -> str:
+    """Remove inline <think>...</think> reasoning blocks, leaving the answer."""
+    return _THINK_RE.sub("", text).strip()
 
 
 def build_messages(text: str, summary_style: str) -> list[dict]:
@@ -31,4 +43,4 @@ def summarize(text: str, config: Config, client=None) -> str:
         messages=build_messages(text, config.summary_style),
         temperature=0.3,
     )
-    return response.choices[0].message.content.strip()
+    return strip_reasoning(response.choices[0].message.content)
