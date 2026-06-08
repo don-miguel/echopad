@@ -2,10 +2,9 @@
 # API keys are NOT here — set ELEVENLABS_API_KEY and MINIMAX_API_KEY in your environment.
 
 [stt]
-model_id = "scribe_v2_realtime"
-language = ""              # "" = auto-detect; else ISO code like "en"
-audio_format = "pcm_16000"
+model_repo = "mlx-community/parakeet-tdt-0.6b-v2"  # local MLX STT model
 sample_rate = 16000
+highpass_cutoff = 80   # Hz; high-pass to cut low-frequency noise before STT
 
 [tts]
 voice_id = "21m00Tcm4TlvDq8ikWAM"   # ElevenLabs "Rachel"; change to your voice

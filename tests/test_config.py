@@ -36,6 +36,21 @@ def test_defaults_when_no_toml():
     assert cfg.hotkeys.stop == "<cmd>+<alt>+."
 
 
+def test_parakeet_defaults():
+    cfg = load_config(config_path=None, env=_env())
+    assert cfg.stt_model_repo == "mlx-community/parakeet-tdt-0.6b-v2"
+    assert cfg.stt_highpass_cutoff == 80
+    assert cfg.sample_rate == 16000
+
+
+def test_parakeet_toml_overrides(tmp_path):
+    p = tmp_path / "config.toml"
+    p.write_text('[stt]\nmodel_repo = "mlx-community/other"\nhighpass_cutoff = 120\n')
+    cfg = load_config(config_path=p, env=_env())
+    assert cfg.stt_model_repo == "mlx-community/other"
+    assert cfg.stt_highpass_cutoff == 120
+
+
 def test_toml_overrides_defaults(tmp_path):
     p = tmp_path / "config.toml"
     p.write_text(

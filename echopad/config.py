@@ -23,6 +23,8 @@ class Config:
     stt_language: str | None
     stt_audio_format: str
     sample_rate: int
+    stt_model_repo: str
+    stt_highpass_cutoff: int
     tts_voice_id: str
     tts_model_id: str
     tts_output_format: str
@@ -73,6 +75,8 @@ def load_config(
         stt_language=language if language else None,
         stt_audio_format=stt.get("audio_format", "pcm_16000"),
         sample_rate=int(stt.get("sample_rate", 16000)),
+        stt_model_repo=stt.get("model_repo", "mlx-community/parakeet-tdt-0.6b-v2"),
+        stt_highpass_cutoff=int(stt.get("highpass_cutoff", 80)),
         tts_voice_id=tts.get("voice_id", "21m00Tcm4TlvDq8ikWAM"),
         tts_model_id=tts.get("model_id", "eleven_flash_v2_5"),
         tts_output_format=tts.get("output_format", "pcm_24000"),
