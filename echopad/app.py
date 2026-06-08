@@ -1,4 +1,5 @@
 import queue
+import threading
 
 import rumps
 
@@ -10,7 +11,7 @@ from echopad.speak_selection import SpeakSelectionController
 from echopad.summarize import summarize
 from echopad.tts import TTSPlayer
 
-_ICONS = {"idle": "🎙️", "listening": "🔴", "speaking": "🔊"}
+_ICONS = {"idle": "🎙️", "listening": "🔴", "transcribing": "⏳", "speaking": "🔊"}
 
 
 class EchoPadApp(rumps.App):
@@ -54,6 +55,9 @@ class EchoPadApp(rumps.App):
         )
         self._hotkeys.start()
 
+        self._model_thread = threading.Thread(target=self._warm_load_model, daemon=True)
+        self._model_thread.start()
+
     # --- main-thread UI marshalling -------------------------------------
 
     def _post(self, fn) -> None:
@@ -67,6 +71,14 @@ class EchoPadApp(rumps.App):
                 return
             fn()
 
+    def _warm_load_model(self) -> None:
+        from echopad.transcriber import load_model
+
+        try:
+            load_model(self._config.stt_model_repo)
+        except Exception as exc:
+            self._notify(f"Speech model failed to load: {exc}")
+
     def _set_state(self, state: str) -> None:
         self._post(lambda: setattr(self, "title", _ICONS[state]))
 
@@ -76,8 +88,8 @@ class EchoPadApp(rumps.App):
     # --- actions ---------------------------------------------------------
 
     def _on_toggle(self) -> None:
+        # The controller/runner drive listening→transcribing→idle via on_state.
         self._dictation.toggle()
-        self._set_state("listening" if self._dictation.is_running() else "idle")
 
     def _on_speak(self) -> None:
         # The controller drives "speaking"/"idle" state around playback.
