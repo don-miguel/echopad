@@ -4,7 +4,10 @@
 [stt]
 model_repo = "mlx-community/parakeet-tdt-0.6b-v2"  # local MLX STT model
 sample_rate = 16000
-highpass_cutoff = 80   # Hz; high-pass to cut low-frequency noise before STT
+highpass_cutoff = 80      # Hz; high-pass to cut low-frequency noise before STT
+vad_aggressiveness = 2    # 0-3; higher = more aggressively treats audio as non-speech
+pause_seconds = 0.7       # silence this long ends an utterance and pastes it
+vad_frame_ms = 30         # VAD frame size (10, 20, or 30)
 
 [tts]
 voice_id = "21m00Tcm4TlvDq8ikWAM"   # ElevenLabs "Rachel"; change to your voice
@@ -18,6 +21,6 @@ base_url = "https://api.minimax.io/v1"
 style = "Summarize in 2-3 concise sentences capturing the key points."
 
 [hotkeys]
-toggle_dictation = "<cmd>+<alt>+d"
+toggle_dictation = "<alt>+<delete>"   # Opt+Delete
 speak_selection = "<cmd>+<alt>+s"
 stop = "<cmd>+<alt>+."

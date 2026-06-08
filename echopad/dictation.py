@@ -3,8 +3,9 @@ import threading
 from typing import Callable
 
 from echopad.config import Config
-from echopad.mic import AudioRecorder
+from echopad.mic import FrameStream
 from echopad.transcriber import is_model_loaded, load_model, process_audio, transcribe
+from echopad.vad import Segmenter, frame_to_pcm16_bytes
 
 log = logging.getLogger("echopad")
 
@@ -15,28 +16,39 @@ Runner = Callable[..., None]  # (config, stop_event, on_committed, set_state)
 
 
 def _default_runner(config, stop_event, on_committed, set_state) -> None:
-    """Record while stop_event is unset, then transcribe locally and emit text."""
+    """Continuously listen; transcribe & emit each utterance at a pause."""
+    import webrtcvad
+
     if not is_model_loaded(config.stt_model_repo):
         raise RuntimeError("Speech model is still loading; try again in a moment.")
     model = load_model(config.stt_model_repo)
 
-    log.info("Recording… (toggle the hotkey again to stop)")
-    with AudioRecorder(sample_rate=config.sample_rate) as recorder:
-        stop_event.wait()
-        audio = recorder.get_audio()
+    vad = webrtcvad.Vad(config.vad_aggressiveness)
+    pause_frames = max(1, round(config.pause_seconds * 1000 / config.vad_frame_ms))
+    segmenter = Segmenter(pause_frames, config.vad_frame_ms)
 
-    if audio.size == 0:
-        log.warning("No audio captured — check Microphone permission for your terminal.")
-        return
-    set_state("transcribing")
-    log.info("Transcribing %.1fs of audio…", audio.size / config.sample_rate)
-    processed = process_audio(audio, config.sample_rate, config.stt_highpass_cutoff)
-    text = transcribe(processed, model, config.sample_rate)
-    if text:
-        log.info("Transcribed: %r — pasting.", text)
-        on_committed(text)
-    else:
-        log.info("Transcription empty — nothing recognized.")
+    def handle(segment) -> None:
+        if segment is None or segment.size == 0:
+            return
+        set_state("transcribing")
+        processed = process_audio(segment, config.sample_rate, config.stt_highpass_cutoff)
+        text = transcribe(processed, model, config.sample_rate)
+        if text:
+            log.info("Transcribed: %r — pasting.", text)
+            on_committed(text)
+        else:
+            log.info("Utterance produced no text.")
+        set_state("listening")
+
+    log.info("Listening… (toggle the hotkey again to stop)")
+    with FrameStream(sample_rate=config.sample_rate, frame_ms=config.vad_frame_ms) as frames:
+        while not stop_event.is_set():
+            frame = frames.read_frame(timeout=0.2)
+            if frame is None:
+                continue
+            is_speech = vad.is_speech(frame_to_pcm16_bytes(frame), config.sample_rate)
+            handle(segmenter.push(is_speech, frame))
+        handle(segmenter.flush())
 
 
 class DictationController:
