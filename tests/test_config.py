@@ -25,10 +25,7 @@ def test_defaults_when_no_toml():
     assert isinstance(cfg, Config)
     assert cfg.elevenlabs_api_key == "el-key"
     assert cfg.minimax_api_key == "mm-key"
-    assert cfg.stt_model_id == "scribe_v2_realtime"
-    assert cfg.stt_audio_format == "pcm_16000"
     assert cfg.sample_rate == 16000
-    assert cfg.stt_language is None
     assert cfg.summarizer_model == "MiniMax-M3"
     assert cfg.summarizer_base_url == "https://api.minimax.io/v1"
     assert cfg.hotkeys.toggle_dictation == "<cmd>+<alt>+d"
@@ -55,11 +52,9 @@ def test_toml_overrides_defaults(tmp_path):
     p = tmp_path / "config.toml"
     p.write_text(
         '[tts]\nvoice_id = "myvoice"\n'
-        '[stt]\nlanguage = "en"\n'
         '[hotkeys]\ntoggle_dictation = "<ctrl>+d"\n'
     )
     cfg = load_config(config_path=p, env=_env())
     assert cfg.tts_voice_id == "myvoice"
-    assert cfg.stt_language == "en"
     assert cfg.hotkeys.toggle_dictation == "<ctrl>+d"
     assert cfg.tts_model_id == "eleven_flash_v2_5"

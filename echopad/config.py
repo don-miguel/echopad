@@ -19,9 +19,6 @@ class Hotkeys:
 class Config:
     elevenlabs_api_key: str
     minimax_api_key: str
-    stt_model_id: str
-    stt_language: str | None
-    stt_audio_format: str
     sample_rate: int
     stt_model_repo: str
     stt_highpass_cutoff: int
@@ -66,14 +63,9 @@ def load_config(
     summ = data.get("summarizer", {})
     hk = data.get("hotkeys", {})
 
-    language = stt.get("language", "") or ""
-
     return Config(
         elevenlabs_api_key=elevenlabs_api_key,
         minimax_api_key=minimax_api_key,
-        stt_model_id=stt.get("model_id", "scribe_v2_realtime"),
-        stt_language=language if language else None,
-        stt_audio_format=stt.get("audio_format", "pcm_16000"),
         sample_rate=int(stt.get("sample_rate", 16000)),
         stt_model_repo=stt.get("model_repo", "mlx-community/parakeet-tdt-0.6b-v2"),
         stt_highpass_cutoff=int(stt.get("highpass_cutoff", 80)),
