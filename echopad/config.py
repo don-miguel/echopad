@@ -1,0 +1,91 @@
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Mapping
+
+
+class ConfigError(Exception):
+    """Raised when required configuration (an API key) is missing."""
+
+
+@dataclass(frozen=True)
+class Hotkeys:
+    toggle_dictation: str
+    speak_selection: str
+    stop: str
+
+
+@dataclass(frozen=True)
+class Config:
+    elevenlabs_api_key: str
+    minimax_api_key: str
+    stt_model_id: str
+    stt_language: str | None
+    stt_audio_format: str
+    sample_rate: int
+    tts_voice_id: str
+    tts_model_id: str
+    tts_output_format: str
+    tts_sample_rate: int
+    summarizer_model: str
+    summarizer_base_url: str
+    summary_style: str
+    hotkeys: Hotkeys
+
+
+def _require(env: Mapping[str, str], name: str) -> str:
+    value = env.get(name)
+    if not value:
+        raise ConfigError(
+            f"Missing required environment variable {name}. "
+            f"Set it before starting EchoPad (no fallback is provided)."
+        )
+    return value
+
+
+def load_config(
+    config_path: Path | None = None,
+    env: Mapping[str, str] | None = None,
+) -> Config:
+    import os
+
+    env = os.environ if env is None else env
+
+    elevenlabs_api_key = _require(env, "ELEVENLABS_API_KEY")
+    minimax_api_key = _require(env, "MINIMAX_API_KEY")
+
+    data: dict = {}
+    if config_path is not None and Path(config_path).exists():
+        with open(config_path, "rb") as f:
+            data = tomllib.load(f)
+
+    stt = data.get("stt", {})
+    tts = data.get("tts", {})
+    summ = data.get("summarizer", {})
+    hk = data.get("hotkeys", {})
+
+    language = stt.get("language", "") or ""
+
+    return Config(
+        elevenlabs_api_key=elevenlabs_api_key,
+        minimax_api_key=minimax_api_key,
+        stt_model_id=stt.get("model_id", "scribe_v2_realtime"),
+        stt_language=language if language else None,
+        stt_audio_format=stt.get("audio_format", "pcm_16000"),
+        sample_rate=int(stt.get("sample_rate", 16000)),
+        tts_voice_id=tts.get("voice_id", "21m00Tcm4TlvDq8ikWAM"),
+        tts_model_id=tts.get("model_id", "eleven_flash_v2_5"),
+        tts_output_format=tts.get("output_format", "pcm_24000"),
+        tts_sample_rate=int(tts.get("sample_rate", 24000)),
+        summarizer_model=summ.get("model", "MiniMax-M3"),
+        summarizer_base_url=summ.get("base_url", "https://api.minimax.io/v1"),
+        summary_style=summ.get(
+            "style",
+            "Summarize in 2-3 concise sentences capturing the key points.",
+        ),
+        hotkeys=Hotkeys(
+            toggle_dictation=hk.get("toggle_dictation", "<cmd>+<alt>+d"),
+            speak_selection=hk.get("speak_selection", "<cmd>+<alt>+s"),
+            stop=hk.get("stop", "<cmd>+<alt>+."),
+        ),
+    )
