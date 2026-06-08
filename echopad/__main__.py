@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 from echopad.app import EchoPadApp
-from echopad.config import ConfigError, load_config
+from echopad.config import load_config
 
 _ACCESSIBILITY_PANE = (
     "x-apple.systempreferences:com.apple.preference.security"
@@ -19,11 +19,7 @@ def _accessibility_trusted() -> bool:
 
 def main() -> None:
     config_path = Path.home() / ".config" / "echopad" / "config.toml"
-    try:
-        config = load_config(config_path=config_path)
-    except ConfigError as exc:
-        print(f"EchoPad configuration error: {exc}", file=sys.stderr)
-        sys.exit(1)
+    config = load_config(config_path=config_path)
 
     if not _accessibility_trusted():
         print(
