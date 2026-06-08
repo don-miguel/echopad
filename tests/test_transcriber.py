@@ -1,4 +1,7 @@
+import threading
+
 import numpy as np
+from echopad import transcriber
 from echopad.transcriber import highpass, normalize, process_audio
 
 
@@ -39,3 +42,29 @@ def test_process_audio_float32_same_length():
     assert out.dtype == np.float32
     assert out.shape == audio.shape
     assert np.max(np.abs(out)) <= 1.0 + 1e-6
+
+
+class _FakeModel:
+    def transcribe(self, path):
+        _FakeModel.thread_id = threading.get_ident()
+
+        class _Result:
+            text = "ok"
+
+        return _Result()
+
+
+def test_transcribe_runs_on_one_dedicated_thread():
+    # Regression: MLX models are thread-bound. All transcription must run on a
+    # single dedicated thread (not the caller's), so it matches the load thread
+    # and never hits "There is no Stream(gpu, 0) in current thread".
+    audio = np.zeros(1600, dtype=np.float32)
+    main_id = threading.get_ident()
+
+    transcriber.transcribe(audio, _FakeModel(), 16000)
+    first = _FakeModel.thread_id
+    transcriber.transcribe(audio, _FakeModel(), 16000)
+    second = _FakeModel.thread_id
+
+    assert first != main_id  # offloaded to the dedicated MLX thread
+    assert first == second  # same dedicated thread every time

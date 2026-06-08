@@ -1,7 +1,16 @@
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 from scipy.signal import butter, sosfilt
 
 _MODEL_CACHE: dict = {}
+
+# MLX streams are thread-local and a model is bound to the thread that loaded it,
+# so ALL MLX work (loading and transcription) must run on one dedicated thread.
+# Running transcribe on a different thread than load raises
+# "There is no Stream(gpu, 0) in current thread". A single-worker executor keeps
+# every MLX call on the same thread.
+_mlx_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="echopad-mlx")
 
 
 def highpass(audio: np.ndarray, sample_rate: int, cutoff: int = 80) -> np.ndarray:
@@ -23,8 +32,7 @@ def process_audio(audio: np.ndarray, sample_rate: int, highpass_cutoff: int = 80
     return normalize(highpass(audio, sample_rate, highpass_cutoff))
 
 
-def load_model(repo: str):
-    """Load (and cache) the parakeet-mlx model. Triggers a one-time download."""
+def _load_on_mlx_thread(repo: str):
     if repo not in _MODEL_CACHE:
         from parakeet_mlx import from_pretrained
 
@@ -32,12 +40,19 @@ def load_model(repo: str):
     return _MODEL_CACHE[repo]
 
 
+def load_model(repo: str):
+    """Load (and cache) the parakeet-mlx model on the dedicated MLX thread.
+
+    Blocks until loaded. Triggers a one-time download on first call.
+    """
+    return _mlx_executor.submit(_load_on_mlx_thread, repo).result()
+
+
 def is_model_loaded(repo: str) -> bool:
     return repo in _MODEL_CACHE
 
 
-def transcribe(audio: np.ndarray, model, sample_rate: int) -> str:
-    """Transcribe a float32 mono array via parakeet-mlx, returning the text."""
+def _transcribe_on_mlx_thread(audio: np.ndarray, model, sample_rate: int) -> str:
     import tempfile
     from pathlib import Path
 
@@ -51,3 +66,14 @@ def transcribe(audio: np.ndarray, model, sample_rate: int) -> str:
         return model.transcribe(path).text.strip()
     finally:
         Path(path).unlink(missing_ok=True)
+
+
+def transcribe(audio: np.ndarray, model, sample_rate: int) -> str:
+    """Transcribe a float32 mono array via parakeet-mlx, returning the text.
+
+    Runs on the dedicated MLX thread (same thread the model was loaded on) and
+    blocks for the result.
+    """
+    return _mlx_executor.submit(
+        _transcribe_on_mlx_thread, audio, model, sample_rate
+    ).result()
