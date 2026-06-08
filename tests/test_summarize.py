@@ -62,3 +62,22 @@ def test_summarize_returns_model_content_and_uses_config_model():
 def test_summarize_empty_text_raises():
     with pytest.raises(ValueError):
         summarize("   ", _cfg(), client=FakeClient("x"))
+
+
+def test_summarize_strips_reasoning_think_block():
+    # MiniMax M3 is a reasoning model: it inlines chain-of-thought in a
+    # <think>...</think> block before the answer. Only the answer should be spoken.
+    content = (
+        "<think>\nThe user wants a 2-3 sentence summary. Key points: a, b, c. "
+        "Let me write it concisely.\n</think>\n"
+        "The board approved hiring and revenue grew eighteen percent."
+    )
+    result = summarize("some long text", _cfg(), client=FakeClient(content))
+    assert result == "The board approved hiring and revenue grew eighteen percent."
+    assert "<think>" not in result
+    assert "user wants" not in result
+
+
+def test_summarize_without_think_block_passes_through():
+    result = summarize("text", _cfg(), client=FakeClient("  Just the summary.  "))
+    assert result == "Just the summary."
