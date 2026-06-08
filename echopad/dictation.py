@@ -1,9 +1,12 @@
+import logging
 import threading
 from typing import Callable
 
 from echopad.config import Config
 from echopad.mic import AudioRecorder
 from echopad.transcriber import is_model_loaded, load_model, process_audio, transcribe
+
+log = logging.getLogger("echopad")
 
 PasteFn = Callable[[str], None]
 NotifyFn = Callable[[str], None]
@@ -17,17 +20,23 @@ def _default_runner(config, stop_event, on_committed, set_state) -> None:
         raise RuntimeError("Speech model is still loading; try again in a moment.")
     model = load_model(config.stt_model_repo)
 
+    log.info("Recording… (toggle the hotkey again to stop)")
     with AudioRecorder(sample_rate=config.sample_rate) as recorder:
         stop_event.wait()
         audio = recorder.get_audio()
 
     if audio.size == 0:
+        log.warning("No audio captured — check Microphone permission for your terminal.")
         return
     set_state("transcribing")
+    log.info("Transcribing %.1fs of audio…", audio.size / config.sample_rate)
     processed = process_audio(audio, config.sample_rate, config.stt_highpass_cutoff)
     text = transcribe(processed, model, config.sample_rate)
     if text:
+        log.info("Transcribed: %r — pasting.", text)
         on_committed(text)
+    else:
+        log.info("Transcription empty — nothing recognized.")
 
 
 class DictationController:
