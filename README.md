@@ -3,6 +3,17 @@
 Local macOS menubar app: toggle dictation (local parakeet-mlx STT → paste) and
 speak-your-selection (MiniMax M3 summary → ElevenLabs TTS).
 
+## Features
+
+- **Dictation (⌥⌘D)** — toggle on, speak, toggle off; your speech is transcribed
+  **fully on-device** with [parakeet-mlx](https://github.com/senstella/parakeet-mlx)
+  and pasted into the focused app. The clipboard is saved and restored.
+- **Speak selection (⌥⌘S)** — grabs your current text selection, summarizes it
+  with MiniMax M3, and reads the summary aloud via ElevenLabs TTS. ⌥⌘. stops playback.
+- Menubar status: 🎙️ idle · 🔴 recording · ⏳ transcribing · 🔊 speaking.
+
+Dictation needs no network or API key. Only speak-selection calls out (MiniMax + ElevenLabs).
+
 ## Setup
 1. `brew install portaudio ffmpeg`
 2. `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
