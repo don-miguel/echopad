@@ -1,20 +1,23 @@
 import numpy as np
-from echopad.mic import AudioRecorder
+from echopad.mic import FrameStream
 
 
-def test_get_audio_empty_before_recording():
-    rec = AudioRecorder(sample_rate=16000)
-    audio = rec.get_audio()
-    assert isinstance(audio, np.ndarray)
-    assert audio.dtype == np.float32
-    assert audio.size == 0
+def test_frame_samples_computed():
+    fs = FrameStream(sample_rate=16000, frame_ms=30)
+    assert fs.frame_samples == 480
 
 
-def test_get_audio_concatenates_frames():
-    rec = AudioRecorder(sample_rate=16000)
-    # Simulate two callback blocks of mono float32 frames.
-    rec._frames.append(np.array([0.1, 0.2], dtype=np.float32))
-    rec._frames.append(np.array([0.3], dtype=np.float32))
-    audio = rec.get_audio()
-    assert audio.dtype == np.float32
-    assert np.allclose(audio, [0.1, 0.2, 0.3])
+def test_read_frame_returns_exact_frame_size():
+    fs = FrameStream(sample_rate=16000, frame_ms=30)
+    # Feed odd-sized blocks; read_frame must re-chunk to exactly frame_samples.
+    fs._queue.put(np.ones(200, dtype=np.float32))
+    fs._queue.put(np.ones(400, dtype=np.float32))
+    frame = fs.read_frame(timeout=0.1)
+    assert frame is not None
+    assert frame.shape[0] == 480
+    assert frame.dtype == np.float32
+
+
+def test_read_frame_timeout_returns_none():
+    fs = FrameStream()
+    assert fs.read_frame(timeout=0.01) is None
